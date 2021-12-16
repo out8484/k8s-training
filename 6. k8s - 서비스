@@ -1,5 +1,346 @@
-=====  
+===== k8s Service = Network
 
+== 외부 서비스에 노출하는 방법
+
+Ingress, NodePort 사용
+	ex: 웹서버 등
+
+
+k8s Service
+	Host		- Nat
+	Docker		- Bridge, Overlay, Host 
+	Container
+
+
+CNI
+	network service
+	docker IP 모두 동일하므로, docker 내 container 들이 통신하는 방법 제공
+	
+
+== Service Type
+Cluster IP
+
+NodePort
+
+LoadBalancer
+
+ExternalName
+
+Ingress 
+
+
+
+
+
+===== Cluster IP service 생성
+
+Cluster IP = POD 로의 단일 진입점 서비스
+	클러스터 내부에서만 사용 가능 서비스
+		그렇지 않을 경우, pod 별 자동 할당된 IP 를 사용
+		Cluster IP 사용시 POD 에 자동 할당된 IP 와 상관없이 Cluster IP 를 서비스 요청하게 되면, pod 간 자동 LB
+	하나 pod 내 여러개의 container 로 LB 되면서 서비스됨
+	DEFAULT = 10.96.0.0/12
+
+
+[root@master ~]# more deploy.yaml 
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: deploy
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: deploy
+  template:
+    metadata:
+      labels:
+        app: deploy
+    spec:
+      containers:
+      - image: nginx:1.14
+        name: nginx
+
+[root@master ~]# k create -f deploy.yaml 
+
+[root@master ~]# k get pods
+NAME                      READY   STATUS    RESTARTS   AGE
+deploy-7f4464bcdf-44jhw   1/1     Running   0          5m55s
+deploy-7f4464bcdf-4n8gv   1/1     Running   0          5m55s
+deploy-7f4464bcdf-bnjq6   1/1     Running   0          5m55s
+
+[root@master ~]# k get pods -o wide
+NAME                      READY   STATUS    RESTARTS   AGE   IP          NODE                NOMINATED 
+deploy-7f4464bcdf-44jhw   1/1     Running   0          15m   10.36.0.3   node2.example.com   <none>				<<-- pod 별 IP 있음        
+deploy-7f4464bcdf-4n8gv   1/1     Running   0          15m   10.46.0.2   node1.example.com   <none>           
+deploy-7f4464bcdf-bnjq6   1/1     Running   0          15m   10.40.0.2   node3.example.com   <none>           
+
+[root@master ~]# k get pods --show-labels
+NAME                      READY   STATUS    RESTARTS   AGE   LABELS
+deploy-7f4464bcdf-44jhw   1/1     Running   0          15m   app=deploy,pod-template-hash=7f4464bcdf
+deploy-7f4464bcdf-4n8gv   1/1     Running   0          15m   app=deploy,pod-template-hash=7f4464bcdf
+deploy-7f4464bcdf-bnjq6   1/1     Running   0          15m   app=deploy,pod-template-hash=7f4464bcdf
+
+
+[root@master ~]# more clusterip.yaml 
+apiVersion: v1
+kind: Service
+metadata:
+  name: clusterip-service
+spec:
+  type: ClusterIP
+  clusterIP: 10.100.100.100
+  selector:
+    app: deploy							<<-- selector 에 의해서 해당 label(app=deploy)에 서비스 적용 됨
+  ports:
+  - protocol: TCP
+    port: 80
+    targetPort: 80
+
+[root@master ~]# k create -f clusterip.yaml 
+
+[root@master ~]# k get service
+NAME                TYPE        CLUSTER-IP       EXTERNAL-IP   PORT(S)   AGE
+clusterip-service   ClusterIP   10.100.100.100   <none>        80/TCP    3m58s				<<-- cluster IP 서비스 확인       
+
+
+
+== 특정 pod 내 하나의 container 에서만 index.html 만 변경
+
+[root@master ~]# k get pods
+NAME                      READY   STATUS    RESTARTS   AGE
+deploy-7f4464bcdf-44jhw   1/1     Running   0          5m55s
+deploy-7f4464bcdf-4n8gv   1/1     Running   0          5m55s
+deploy-7f4464bcdf-bnjq6   1/1     Running   0          5m55s
+
+[root@master ~]# k exec -it deploy-7f4464bcdf-44jhw -- bin/bash
+root@deploy-7f4464bcdf-44jhw:/# 
+root@deploy-7f4464bcdf-44jhw:/# cd /usr/share/nginx/html/
+root@deploy-7f4464bcdf-44jhw:/usr/share/nginx/html# 
+root@deploy-7f4464bcdf-44jhw:/usr/share/nginx/html# 
+root@deploy-7f4464bcdf-44jhw:/usr/share/nginx/html# echo NODE1 > index.html
+
+
+== pod 내 container 들에 번갈아 가면서 서비스 됨을 확인
+
+[root@master ~]# curl 10.100.100.100		<<-- cluster IP 로 서비스 요청
+NODE1											<<-- index.html 변경 container 에서 서비스 받음
+
+[root@master ~]# curl 10.100.100.100
+<!DOCTYPE html>								<<-- 변경되지 않은 container 에서 서비스 받음
+<html>
+<head>
+<title>Welcome to nginx!</title>
+<style>
+    body {
+        width: 35em;
+        margin: 0 auto;
+        font-family: Tahoma, Verdana, Arial, sans-serif;
+    }
+</style>
+</head>
+<body>
+<h1>Welcome to nginx!</h1>
+<p>If you see this page, the nginx web server is successfully installed and
+working. Further configuration is required.</p>
+
+<p>For online documentation and support please refer to
+<a href="http://nginx.org/">nginx.org</a>.<br/>
+Commercial support is available at
+<a href="http://nginx.com/">nginx.com</a>.</p>
+
+<p><em>Thank you for using nginx.</em></p>
+</body>
+</html>
+
+
+[root@master ~]# k describe service clusterip-service
+Name:              clusterip-service
+Namespace:         default
+Labels:            <none>
+Annotations:       <none>
+Selector:          app=deploy
+Type:              ClusterIP
+IP Family Policy:  SingleStack
+IP Families:       IPv4
+IP:                10.100.100.100
+IPs:               10.100.100.100
+Port:              <unset>  80/TCP
+TargetPort:        80/TCP
+Endpoints:         10.36.0.3:80,10.40.0.2:80,10.46.0.2:80
+Session Affinity:  None
+Events:            <none>
+
+
+
+
+
+===== NodePort
+
+서비스를 외부에 노출하는 방법
+	cluserIP 를 생성 후에만 가능
+	default: 30000 ~ 32767 node port 로 예약
+
+
+[root@master ~]# more nodeport.yaml 
+apiVersion: v1
+kind: Service									<<- Service
+metadata:
+  name: nodeport-service
+spec:
+  type: NodePort								<<-- NodePort 타입 설정(대소문자주의)
+  clusterIP: 10.100.100.200
+  selector:
+    app: deploy
+  ports:
+  - protocol: TCP
+    port: 80
+    targetPort: 80
+    nodePort: 30200
+
+[root@master ~]# k get pods -o wide
+NAME                      READY   STATUS    RESTARTS   AGE   IP          NODE                NOMINATED NODE   READINESS GATES
+deploy-7f4464bcdf-44jhw   1/1     Running   0          39m   10.36.0.3   node2.example.com   <none>           <none>
+deploy-7f4464bcdf-4n8gv   1/1     Running   0          39m   10.46.0.2   node1.example.com   <none>           <none>
+deploy-7f4464bcdf-bnjq6   1/1     Running   0          39m   10.40.0.2   node3.example.com   <none>           <none>
+
+[root@master ~]# k create -f nodeport.yaml 
+service/nodeport-service created
+
+[root@master ~]# k get service 
+NAME               TYPE        CLUSTER-IP       EXTERNAL-IP   PORT(S)        AGE
+kubernetes         ClusterIP   10.96.0.1        <none>        443/TCP        2d5h
+mydb               ClusterIP   10.100.179.138   <none>        80/TCP         25h
+myservice          ClusterIP   10.109.88.163    <none>        80/TCP         26h
+nodeport-service   NodePort    10.100.100.200   <none>        80:30200/TCP   18s
+
+[root@master ~]# curl 10.100.100.200
+NODE1
+
+[root@master ~]# k describe service nodeport-service
+Name:                     nodeport-service
+Namespace:                default
+Labels:                   <none>
+Annotations:              <none>
+Selector:                 app=deploy
+Type:                     NodePort
+IP Family Policy:         SingleStack
+IP Families:              IPv4
+IP:                       10.100.100.200
+IPs:                      10.100.100.200
+Port:                     <unset>  80/TCP								<<-- 내부 pod 에서 서비스하는 port
+TargetPort:               80/TCP
+NodePort:                 <unset>  30200/TCP							<<-- 외부에서 보고 들어오는 PORT 번호
+Endpoints:                10.36.0.3:80,10.40.0.2:80,10.46.0.2:80
+Session Affinity:         None
+External Traffic Policy:  Cluster
+Events:                   <none>
+
+
+== 외부에서 NodePort 로의 접속 확인
+
+[root@station3 ~]# curl node1.example.com:30200
+NODE1
+
+
+
+
+
+===== Loadbalancer
+
+CluserIP 기본 구성
+	NodePort 설정 후
+		Loadbalancer 사용 가능
+
+
+[root@master ~]# more lb.yaml 
+apiVersion: v1
+kind: Service
+metadata:
+  name: lb-service
+spec:
+  type: LoadBalancer					<<-- type = LoadBalancer (대소문자 주의)
+  selector:
+    app: deploy
+  ports:
+  - protocol: TCP
+    port: 80
+    targetPort: 80
+
+[root@master ~]# k get service
+NAME               TYPE           CLUSTER-IP       EXTERNAL-IP   PORT(S)        AGE
+lb-service         LoadBalancer   10.103.188.24    <pending>     80:31946/TCP   3s
+<<-- 외부의 L4, CLOUD 사업자 등을 통해 외부 노출된 External IP 지정하면 <pending> 부분에 IP 들어감
+
+
+
+
+
+===== ExternalName
+
+[root@master ~]# more exernalname.yaml 
+apiVersion: v1
+kind: Service
+metadata:
+  name: externalname-service
+spec:
+  type: ExternalName					<<-- type = ExternalName (대소문자 주의)
+  externalName: google.com			<<-- key: value (value 전에 띄어 쓰기 주의)
+
+[root@master ~]# k create -f exernalname.yaml 
+service/externalname-service created
+
+[root@master ~]# k get service
+NAME                   TYPE           CLUSTER-IP       EXTERNAL-IP   PORT(S)        AGE
+externalname-service   ExternalName   <none>           google.com    <none>         3s
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+-----------------------------------------------------------------------------
+webui 띄우는 방법
+
+https://kubernetes.io/ko/docs/tasks/access-application-cluster/web-ui-dashboard/
+
+1. kubectl apply -f https://raw.githubusercontent.com/kubernetes/dashboard/v2.4.0/aio/deploy/recommended.yaml
+
+2.  kubectl proxy
+
+3. 로그인하기 위해서는 token key를 알아야 합니다 
+#kubectl get serviceaccount -A
+
+
+토큰키 확인
+# kubectl describe serviceaccount kubernetes-dashboard -n kubernetes-dashboard
+
+tokens :  를 확인하세요 
+
+토큰키 체크하기 
+
+#kubectl describe secret <tokens> -n kubernetes-dashboard
 
 
 
