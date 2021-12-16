@@ -1,0 +1,419 @@
+===== Deployment
+
+RS 를 제어하는 Parent 역할
+	deployment 가 parent process 이고, RS 를 생성 함
+	pod 에 문제가 있으면, RS 가 pod 를 살릴 거고, RS 에 문제가 생기면, Deployment 가 RS 를 살린다.
+
+궁극적인 목표는 rollout (rolling update, rolling back) 을 하기 위해 만들어 짐
+	개수를 보장
+	기존에 내가 서비스하는 버전을 모두 recording 뜰 수 있음
+	recording 기능이 RS/RC 와의 가장 큰 차이점
+		RS/RC 는 replica 관리 가능하지만, 버전 업그레이드에 대한 제약 사항이 있음
+
+개수 맞추는 방식
+	rolling update
+	순차적으로 한 개씩 만 rolling update
+			Deployment
+		ReplicaSet		ReplicaSet
+		old PoD		new pod
+		1.4			-> 	1.5				- 첫 번째 rollling update 후
+		1.4			-> 	1.5				- 두 번째 rollling update 후
+		1.4			-> 	1.5				- 세 번째 rollling update 하게 됨
+
+
+[root@master ~]# more deweb.yaml 
+apiVersion: apps/v1
+kind: Deployment
+~~~ "Kind" 제외하고 RS 와 동일
+    			
+rolling update 시 새로운 ReplicaSet 을 만듬으로써 수행
+	신규 pod 를 ReplicaSet 에 맞추어 순차적으로 하나씩 업그레이드
+	기존 pod 를 하나씩 하나씩 없앰
+
+
+작동 원리
+	deployment가 RS 를 하나 만듬
+	RS 에서는 실행 시킬 pod 를 만듬
+	RS는 controller 처럼 pod 의 개수를 보장해 줌
+	
+
+kubectl create deployment deweb --image=nginx:1.14 --dry-run=client -o yaml >deweb.yaml
+kubectl create deployment deweb --image=nginx:1.14 
+kubectl edit deployments.apps deweb
+
+
+[root@master ~]# kubectl create deployment deploy --image=nginx:1.14 --dry-run=client -o yaml >deploy.yaml
+
+[root@master ~]# more deploy.yaml 
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: deploy				<<-- deployment 이름
+spec:
+  replicas: 3					<<- 개수보장
+  selector:
+    matchLabels:
+      app: deploy
+  template:
+    metadata:
+      labels:
+        app: deploy
+    spec:
+      containers:
+      - image: nginx:1.14
+        name: nginx			<<-- container 이름
+
+
+
+
+
+===== rolling update & rolling back
+
+
+== snapshot(record) 를 반드시 옵션 사용하여 POD 생성
+	deployment 의 주 목적은 rollin update & rolling back 이므로 record(snapshot) 은 필수 임
+	record(snapshot) 이 있어야 rollout/rollback 이 가능하므로
+
+[root@master ~]# k create -f deploy.yaml --record=true 
+Flag --record has been deprecated, --record will be removed in the future
+deployment.apps/deploy created
+
+[root@master ~]# k get pods
+NAME                      READY   STATUS    RESTARTS   AGE
+deploy-7f4464bcdf-5kxmb   1/1     Running   0          2m42s
+deploy-7f4464bcdf-9j7hm   1/1     Running   0          2m42s
+deploy-7f4464bcdf-h4dvw   1/1     Running   0          2m42s
+
+[root@master ~]# k get deployment deploy
+NAME     READY   UP-TO-DATE   AVAILABLE   AGE
+deploy   3/3     3            3           3m
+
+[root@master ~]# k describe pod deploy-7f4464bcdf-5kxmb
+~~~~~
+  nginx:
+    Container ID:   docker://b07300e9b6fda5f187517e7a2d1888bb8c387ceab77b7cfbce04f3820597ed71
+    Image:          nginx:1.14
+
+[root@master ~]# k rollout history deployment deploy
+deployment.apps/deploy 
+REVISION  CHANGE-CAUSE
+1         kubectl create --filename=deploy.yaml --record=true
+
+
+== 이미지 변경 rolling update (upgrade)
+
+[root@master ~]# k rollout
+Manage the rollout of a resource.
+  
+ Valid resource types include:
+
+  *  deployments
+  *  daemonsets
+  *  statefulsets
+
+Examples:
+  # Rollback to the previous deployment
+  kubectl rollout undo deployment/abc
+  
+  # Check the rollout status of a daemonset
+  kubectl rollout status daemonset/foo
+
+Available Commands:
+  history     View rollout history
+  pause       Mark the provided resource as paused
+  restart     Restart a resource
+  resume      Resume a paused resource
+  status      Show the status of the rollout
+  undo        Undo a previous rollout
+
+Usage:
+  kubectl rollout SUBCOMMAND [options]
+
+Use "kubectl <command> --help" for more information about a given command.
+Use "kubectl options" for a list of global command-line options (applies to all commands).
+
+
+[root@master ~]# k set image deployment deploy deploy nginx=nginx:1.15 --record=true
+Flag --record has been deprecated, --record will be removed in the future
+deployment.apps/deploy image updated
+deployment.apps/deploy image updated
+
+
+[root@master ~]# k rollout history deployment deploy
+deployment.apps/deploy 
+REVISION  CHANGE-CAUSE
+1         kubectl create --filename=deploy.yaml --record=true
+2         kubectl set image deployment deploy deploy nginx=nginx=1.15 --record=true
+3         kubectl set image deployment deploy deploy nginx=nginx:1.15 --record=true
+
+
+= from 
+
+[root@master ~]# k get pods
+NAME                      READY   STATUS    RESTARTS   AGE
+deploy-7f4464bcdf-5kxmb   1/1     Running   0          2m42s
+deploy-7f4464bcdf-9j7hm   1/1     Running   0          2m42s
+deploy-7f4464bcdf-h4dvw   1/1     Running   0          2m42s
+
+= to
+
+[root@master ~]# k get pod
+NAME                      READY   STATUS    RESTARTS   AGE
+deploy-6fb8684878-bkb68   1/1     Running   0          49s
+deploy-6fb8684878-dnkn8   1/1     Running   0          27s
+deploy-6fb8684878-xjp26   1/1     Running   0          38s
+
+
+[root@master ~]# k describe pods deploy-6fb8684878-bkb68
+~~~~~
+Containers:
+  nginx:
+    Container ID:   docker://7aed291d1fba0997d228311bac1a458982bfc49a61527ba67104c90795b7ab80
+    Image:          nginx:1.15
+
+
+== 실시간으로 rolling update 상태 확인
+
+[root@master ~]# watch kubectl get pods -o wide
+
+Every 2.0s: kubectl get pods -o wide                                                         Wed Dec 15 20:40:38 2021
+
+NAME                      READY   STATUS              RESTARTS   AGE    IP          NODE                NOMINATED NODE   READINESS GATES
+deploy-85cc5d5dc6-8v9kc   1/1     Running             0          47s    10.40.0.3   node3.example.com   <none>    <none>
+deploy-85cc5d5dc6-c9q68   0/1     ContainerCreating   0          21s    <none>      node2.example.com   <none>    <none>
+deploy-85cc5d5dc6-wwjbm   1/1     Running             0          61s    10.46.0.3   node1.example.com   <none>    <none>
+deploy-88cf97d95-ns89t    1/1     Running             0          112s   10.36.0.3   node2.example.com   <none>
+
+
+== 실시간으로 rolling update 중지/상태 등 
+
+[root@master ~]# watch kubectl rollout status deployment deploy
+[root@master ~]# watch kubectl rollout resume deployment deploy
+[root@master ~]# watch kubectl rollout pause deployment deploy
+
+
+== rollout undo
+
+[root@master ~]# k rollout undo deployment deploy
+deployment.apps/deploy rolled back
+ 
+[root@master ~]# k rollout history deployment deploy
+deployment.apps/deploy 
+REVISION  CHANGE-CAUSE
+1         kubectl create --filename=deploy.yaml --record=true
+2         kubectl set image deployment deploy deploy nginx=nginx=1.15 --record=true
+3         kubectl set image deployment deploy deploy nginx=nginx:1.15 --record=true
+5         kubectl set image deployment deploy deploy nginx=nginx:1.17 --record=true
+6         kubectl set image deployment deploy deploy nginx=nginx:1.16 --record=true
+<<-- 4 번이 rollback 되었으므로, 6 번으로 옮겨진 것 임
+
+
+[root@master ~]# k rollout undo deployment deploy --to-revision=1
+deployment.apps/deploy rolled back
+
+[root@master ~]# k rollout history deployment deploy
+deployment.apps/deploy 
+REVISION  CHANGE-CAUSE
+2         kubectl set image deployment deploy deploy nginx=nginx=1.15 --record=true
+3         kubectl set image deployment deploy deploy nginx=nginx:1.15 --record=true
+5         kubectl set image deployment deploy deploy nginx=nginx:1.17 --record=true
+6         kubectl set image deployment deploy deploy nginx=nginx:1.16 --record=true
+7         kubectl create --filename=deploy.yaml --record=true
+
+
+== Deployment --- RS --- PoD 와의 관계
+	deployment 가 parent process 이고, RS 를 생성 함
+	pod 에 문제가 있으면, RS 가 pod 를 살릴 거고, RS 가 지원 지면, Deployment 가 RS 를 살린다.
+
+[root@master ~]# k get rs 
+NAME                DESIRED   CURRENT   READY   AGE
+deploy-7f4464bcdf   3         3         3       27m
+
+[root@master ~]# k get pod
+NAME                      READY   STATUS    RESTARTS   AGE
+deploy-7f4464bcdf-4chnt   1/1     Running   0          2m36s
+deploy-7f4464bcdf-qfwn2   1/1     Running   0          2m38s
+deploy-7f4464bcdf-vznvs   1/1     Running   0          2m40s
+
+[root@master ~]# k get deployment
+NAME     READY   UP-TO-DATE   AVAILABLE   AGE
+deploy   3/3     3            3           28m
+
+
+== restart 관련
+	restart 할경우 pod 들이 재 생성됨
+	특정 pod 를 지우는 경우도 가능함. deployment 가 RS 를 제어하고, RS 는 pod 갯수를 관리하므로, 재 생성 할 거임
+		하나의 pod 를 restart 하는 건 지우면 될거고, 동일 서비스 pod 를 모두 restart 하려면,  resource 를 restart 하면 될듯
+
+[root@master ~]# k rollout restart deployment deploy 
+deployment.apps/deploy restarted
+
+= FROM
+
+[root@master ~]# k get pod
+NAME                     READY   STATUS              RESTARTS   AGE
+deploy-5bfbbf776-cfswr   1/1     Running             0          3s
+deploy-5bfbbf776-df6l8   1/1     Running             0          4s
+deploy-5bfbbf776-vmj5k   0/1     ContainerCreating   0          1s
+deploy-ffb8fd98c-p4hd5   1/1     Running             0          10s
+
+= TO
+
+[root@master ~]# k get pod
+NAME                     READY   STATUS    RESTARTS   AGE
+deploy-5bfbbf776-cfswr   1/1     Running   0          6m18s
+deploy-5bfbbf776-df6l8   1/1     Running   0          6m19s
+deploy-5bfbbf776-vmj5k   1/1     Running   0          6m16s
+
+
+== deployment 삭제
+
+[root@master ~]# k delete deployment deploy
+deployment.apps "deploy" deleted
+
+[root@master ~]# k get pods
+No resources found in default namespace.
+
+
+
+
+
+===== annotation 
+
+리소스에 대한 정보 전달을 목적으로 사용 
+구성은 label과 동일합니다 key: value 구조로 가져갑니다 
+
+annotations:
+  imageregistry: "http://registry.example.com
+  build: "hong"
+  builddate: "20211216"
+  
+ 
+
+
+
+===== statfulset
+ 기본적으로 pod의 이름을 보장해 줍니다 
+ 단 마지막 문장에 숫자가 들어갑니다 ( 숫자 카운트 0번째 요소부터 시작합니다)
+ 
+ 
+1. sf.yaml 업로드한 yaml을 확인해주세요 
+2. kubectl create -f sf.yaml   
+nginx1.14
+
+3. kubectl edit statefulsets sf-nginx 
+에서 image 버전을 nginx1.15로 변경 
+
+4. # kubectl rollout undo statefulset sf-nginx  
+기존의 1.14버전으로 rollout 합니다 
+
+
+
+
+
+===== Daemonset
+
+node 당 하나씩 pod 가 배포 되므로, Replicas 가 없는 특성
+	No replicas
+	하드웨어 증설시 자동으로 신규 node 에 하나의 신규 pod 배포
+
+
+[root@master ~]# more daemonset.yaml
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: nginx-daemonset
+spec:		
+#  replicas: 3					<<-- No replicas				
+  selector:
+    matchLabels:
+      app: web
+      version: "1.14"
+
+  template:
+    metadata:
+      labels:
+        app: web
+        version: "1.14"
+    spec:
+      containers:
+        - name: nginx
+          image: nginx:1.14
+
+
+== DeamonSet 배포
+
+[root@master ~]# k create -f daemonset.yaml 
+daemonset.apps/nginx-daemonset created
+
+[root@master ~]# k get pods
+NAME                    READY   STATUS    RESTARTS   AGE
+nginx-daemonset-d2v8f   1/1     Running   0          3s
+nginx-daemonset-j8xc9   1/1     Running   0          3s
+nginx-daemonset-vzhlg   1/1     Running   0          3s
+
+[root@master ~]# k get pods -o wide
+NAME                    READY   STATUS    RESTARTS   AGE   IP          NODE                NOMINATED NODE   READINESS GATES
+nginx-daemonset-d2v8f   1/1     Running   0          12s   10.36.0.3   node2.example.com   <none>           <none>
+nginx-daemonset-j8xc9   1/1     Running   0          12s   10.40.0.2   node3.example.com   <none>           <none>
+nginx-daemonset-vzhlg   1/1     Running   0          12s   10.46.0.2   node1.example.com   <none>           <none>
+
+
+
+== token key 확인
+
+[root@master ~]# kubeadm token list
+
+
+== token key 신규 생성
+	24시간 지나면 사라짐
+
+[root@master ~]# kubeadm token create 
+sf54bi.bb5bkf0anynt1d6y
+
+
+== hash key 찾기
+
+root@master ~]# openssl x509 -pubkey -in /etc/kubernetes/pki/ca.crt | openssl rsa -pubin -outform der 2>/dev/null | openssl dgst -sha256 -hex | sed 's/^.* //'
+d0305284d3575b5d925b70ed96d93f003d8950f3f7daab8a60a241018f0fb737
+
+
+== token 복사하여, node 추가
+
+kubeadm join 10.100.0.104:6443 --token sf54bi.bb5bkf0anynt1d6y --discovery-token-ca-cert-hash sha256:d0305284d3575b5d925b70ed96d93f003d8950f3f7daab8a60a241018f0fb737
+
+
+
+
+
+===== cronjob
+
+job
+	모든 application 이 계속해서 running 할 필요가 없습니다 
+	본연의 일을 마무리 하면 release해되 되는 application도 존재 합니다
+	하지만 마무리 못하면 restart합니다 
+
+
+kubectl run testpod --image=centos:7 --command sleep 5
+kubectl run testpod --image=centos:7 --command sleep 5 --dry-run=client -o yaml > testpod.yaml
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
