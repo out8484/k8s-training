@@ -1,0 +1,197 @@
+===== k8s controller
+k8s architecture
+	교재 pdf 파일
+
+Deployment 	--- 	Replicaset 	---		Pod
+parent process		child process
+	parent 가 죽으면, child 도 같이 죽지만,
+	child 가 죽으면, parent 가 살릴려고 함
+
+
+
+
+===== RC: ReplicationController
+
+k8s day-1 부터 사용하던 controller 로 RS(ReplicaSet)으로 발전 됨
+
+해당 서비스의 갯수 보장
+
+1. RC 실행
+2. 자신이 가지고 있는 label selector 와 일치하는 labels 를 가진 pod 검색
+3. 검색된 pod 의 수와 자신이 desired 하는 수위 pod 의 수가 일치하는지 확인
+4. 갯수가 많은 경우 실행중인 pod 내 최신 pod 를 삭제
+5.갯수가 적은 경우 정의된 template 대로 원하는 replica 와 일치하는 만큼의 pod 만 실행
+
+	
+RC, RS, Deploy 는 기본적으로 갯수를 보장해 주는 역할
+	갯수를 정하면, 무조건 보장
+	RC, RS 를 yaml 로만 작성 가능	- cli 로 불가
+
+
+# kubectl create deployment deweb --image=nginx:1.14 --dry-run=client -o yaml >deweb.yaml
+# kubectl create deployment deweb --image=nginx:1.14 
+# kubectl edit deployments.apps deweb
+
+
+요구하는 pod 의 갯수를 보장하며, pod 집합의 실행을 항상 안정적으로 유지하는 것이 목표
+	요구하는 pod 의 갯수가 많으면, 최근에 생성한 pod 를 삭제
+	replicas: 3 만 모니터링 하여 개수만 유지 하도록 동작 하는 것 임
+		여기서 중요한 것은 labels 를 기준으로 개수를 유지
+
+[root@master ~]# more deweb.yaml 
+apiVersion: v1
+kind: ReplicationController
+metadata:
+  name: rc-nginx 
+spec:
+  replicas: 3
+  selector:
+      app: webui
+  strategy: {}
+  template:
+    metadata:
+      labels:
+        app: webui 
+    spec:
+      containers:
+      - image: nginx:1.14
+        name: nginx-containter
+
+[root@master ~]# k create -f deweb.yaml 
+replicationcontroller/rc-nginx created
+
+[root@master ~]# k get pods
+NAME             READY   STATUS    RESTARTS   AGE
+rc-nginx-7p8nq   1/1     Running   0          4s			<<-- replica 개수에 따라 자동으로 이름 생성
+rc-nginx-nrqc6   1/1     Running   0          4s
+rc-nginx-wp8wp   1/1     Running   0          4s
+
+[root@master ~]# k get rc rc-nginx
+NAME       DESIRED   CURRENT   READY   AGE
+rc-nginx   3         3         3       62s
+
+[root@master ~]# k get pods --show-labels
+NAME             READY   STATUS    RESTARTS   AGE     LABELS
+rc-nginx-7p8nq   1/1     Running   0          2m56s   app=webui
+rc-nginx-nrqc6   1/1     Running   0          2m56s   app=webui
+rc-nginx-wp8wp   1/1     Running   0          2m56s   app=webui
+
+
+== RC는 label 을 기준으로 replica 개수를 유지하므로, label 을 변경하게 되면, 새롭게 새로 생성됨
+[root@master ~]# k label pod rc-nginx-7p8nq app=nginx --overwrite
+pod/rc-nginx-7p8nq labeled
+
+[root@master ~]# k get pods --show-labels
+NAME             READY   STATUS    RESTARTS   AGE     LABELS
+rc-nginx-7p8nq   1/1     Running   0          5m21s   app=nginx
+rc-nginx-nrqc6   1/1     Running   0          5m21s   app=webui
+rc-nginx-rkrks   1/1     Running   0          4s      app=webui
+rc-nginx-wp8wp   1/1     Running   0          5m21s   app=webui
+
+
+== pod 를 지워보면, RC 는 지워지지 않고, replica 에 따라 다시 재 생성
+
+[root@master ~]# k delete pods --all
+pod "rc-nginx-7p8nq" deleted
+pod "rc-nginx-nrqc6" deleted
+pod "rc-nginx-rkrks" deleted
+pod "rc-nginx-wp8wp" deleted
+
+[root@master ~]# k get pods
+NAME             READY   STATUS    RESTARTS   AGE
+rc-nginx-8t6gc   1/1     Running   0          4s
+rc-nginx-l4bnt   1/1     Running   0          4s
+rc-nginx-vhwxv   1/1     Running   0          4s
+
+
+== replica 개수 변경
+
+[root@master ~]# k scale rc rc-nginx --replicas=2
+replicationcontroller/rc-nginx scaled
+
+[root@master ~]# k get pod
+NAME             READY   STATUS    RESTARTS   AGE
+rc-nginx-8t6gc   1/1     Running   0          8m32s
+rc-nginx-l4bnt   1/1     Running   0          8m32s
+
+
+
+요즘은 deployment 를 많이 사용하는 경향이 있음
+	RC 는 갯수만 보장
+	deployment 는 yaml 을 변경하면, 실행 중인 pod 에 버전 등 모든 내용을 한번에 변경 가능하므로,
+
+Deployment 배포 yaml
+	apiVersion: apps/v1
+	kind: Deployment
+	<<-- apiVersion, kind 만 다름
+
+	Kubernetes에서 어플리케이션 단위를 관리하는 Controller 이며 Kubernetes의 최소 유닛인 Pod에 대한 기준스펙을 정의한 Object
+		개념적으로 Deployment = ReplicaSet +Pod+history
+		Pod의 scale in / out 되는 기준을 정의한다.
+		Pod의 배포되고 update 되는 모든 버전을 추적할 수 있다.
+		배포된 Pod에 대한 rollback을 수행할 수 있다.
+
+
+
+ReplicationController 배포 yaml
+	apiVersion: v1
+	kind: ReplicationController
+
+
+
+
+
+===== ReplicaSet
+
+RC 와 동일하지만, match expression 만 다름
+	좀 더 풍부한 selector 가 존재
+		in, notin은 key와 value 가 존재 해야 함
+		doesnotexist, exist 는 key 만 있으면 됨
+
+
+변수 : 변하는 수
+	변수명은 마음대로 지을 수 있지만, 한번 정해지면 고정
+상수 : 변하지 않는 수
+
+a 	= 	1,2,3,4,5
+변수	=	상수
+	"=" 같다라는 의미가 아니라, 오른쪽 상수는 변수 a 에 넣는 다는 의미
+	장바구니(a) = 우유, 빵, 고기 ....
+key	=	value
+
+
+[root@master ~]# more deweb.yaml 
+apiVersion: apps/v1
+kind: ReplicaSet
+~~~ RC 와 동일
+    matchLabels:					<<-- match expression 이 존재
+      app: deweb			
+
+
+
+
+
+--------------------------------------------------------------------------
+static pod: 
+
+일반적인 k8s 구조는 master 서버를 통해서 work node에 실행되는 구조 입니다 
+내가 원하는 work node에다 manual 하게 pod를 실행하는 방법 입니다 
+work node의 /etc/kubernetes/manifests/ 해당 폴더에 yaml파일을 만드시면 
+그 work node에 pod가 생성 됩니다
+
+pod 삭제 방법은 해당 yaml파일을 삭제하시면 됩니다. 
+master node에서 kubectl delete로 삭제가 안됩니다.
+
+1. master node에서 해당 static pod를 만들어보세요 
+
+2. kubectl get pods로 확인해보세요 
+
+3. # cd /var/lib/kubelet/ 해당 폴더의 config.yaml 파일에서
+staticPodPath: 를 수정하시면 됩니다 
+
+해당 경로 수정을 적용 하기 위해서는 
+systemctl restart kubelet을 해주셔야 합니다 
+
+4. pod 삭제 방법은 해당 node에서 yaml파일을 삭제하시면 됩니다.
+
+
