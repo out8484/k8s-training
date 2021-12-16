@@ -1,0 +1,849 @@
+===== 기본
+docker 
+	기본적인 일을 모두 다 함
+k8s
+	docker를 관린 하는 역할
+	ex> 로그를 확인하거나, 상태 확인은 가능하지만, docker 에서 모든 작업 수행
+
+
+
+
+
+===== 배경 지식
+monolith
+	하나의 서버에 하나의 소프트웨어(서비스)
+스푸투니크
+	소련최초 인공 위성
+나사에서 네트워크(망) 을 만들고자 함
+	WWW 의 시초
+멀틱스: 분산환경, 공유자원... 당시에서는 불가... 하드웨어 성능
+유닉스: 
+리눅스: 
+병렬환경으로의 전환 = 분산처리			-> 무 중단 서비스
+	클라우드, 빅데이터(haddop file system) 
+spring cloud
+
+why? k8s
+	무 중단 서비스를 위한 오케스트레이터
+
+
+
+
+
+===== 소프트웨어 공학
+UI/UX 설계
+	requirements
+		JIRA: 요구사항 관리 소프트웨어
+개발
+	OS, DB, Language, Develper
+애플리케이션(스마트폰 앱 등)
+	웹 앱(모바일 기반 앱)		NATIVE web
+	m.naver.com		음성인식, 안면 인식
+	하이브리드 앱
+테스트: 기능, 성능
+	TDD:test driven development
+배포
+	jnkins:자동화, CI/CD
+운영
+	대쉬보드(APM)
+Agile
+	CI/CD가 현실에서 가능한가? 매일매일 FIX/배포가 가능할지?
+	민첩함을 위해서는 자동화가 반드시 필요
+	RPA (UiPath)
+		화면을 인식하여 자동화
+		좌표/object/이미지/ocr이미지 인식 후 recording & replay
+	크롬/사파리
+		웹개발자툴 -> tag 를 하면, object 에 대한 link 를 얻어 올 수 있음 -> 이를 통해 자동화
+	예> MES:제조 실행 시스템 공장 자동화 모니터링
+		로봇암 모니터링 등
+자동화
+	CI(지속적인 통합)
+		github	jenkins	docker	k8s
+		<-----개발---------------------------><-운영->
+클라우드 helm
+	k8s 패키지 매니저
+redhat
+	rpm -- yum -- dnf
+	REHL, Fedora, Centos(IBM 인수 후 더이상 release 안할 예정)  3가지 존재
+ubuntu
+	apt-get
+
+
+
+
+
+===== Docker
+1. 속도
+	업데이트, 패치 업데이트 주기가 짧음 (모바일 앱..)
+2. 크기
+	앱크기가 1G 라면? 
+3. 환경
+	개발자의 개발 환경 -> 서버에 코드 업로드 -> 여러명의 개발자 -> 단위 테스트 OK, but 통합 테스트
+	모든 개발자에게 동일 개발 환경 제공
+		개발환경: OS, DB, language -> compile 안된거나, running 하지 않음
+
+기존과 다른 환경을 제공하는 docker 는 무엇인가?
+	위 3가지 충족 가능한 환경을 제공
+	라이브러리	패키지
+	도서관		책	
+		김치찌게 만들고 싶음	-> 도서관 -> 요리코너 -> 한식 -> 김치찌게 레시피
+	외장함수
+		내가 만든 함수
+	내장함수
+		기존 언어/시스템에 있는 함수
+	ls 명령어
+		명령어에 맞는 라이브러리가 있어서, ls 명령어가 수행되고 결과를 보여 줌
+1.  정말 필요한 라이브러리만 있는 OS
+2. 격리된 공간을 제공
+	자원:cpu, memory / 네트워크 / hostname / user name / 파티션 등
+	cgroup from Google / namespace from Redhat / lxc -> docker 이미 만들어진 것을 조합하여 Google 에서 만듬
+	"jails" 개념으로 시작
+		각 죄수는 서로 모르지만, 간수는 관리 가능	
+	cgroup
+		cpu/memory 하드웨어 제어
+	chroot
+		change root	
+	namespace
+		hostname/user/network
+3. 동일 개발 환경 제공
+
+
+Docker 는 systemd 데몬을 사용하는 것임을 알 수 있음
+
+Container 는 리눅스 커널에서 나온것이구나.
+- 윈도우에는 리눅스 커널을 설치 해야 함 -> WSL(Windows Subsystem for Linux 2) 설치 필요
+
+
+
+
+
+
+===== Docker 사용법
+if 카카오 2019
+	참고
+	https://mk.kakaocdn.net/dn/if-kakao/conf2019/%EB%B0%9C%ED%91%9C%EC%9E%90%EB%A3%8C_2019/T01-S01.pdf
+
+office 파일 = image
+office 설치 = docker run
+office 실행해서 엑셀 사용 = container(process)
+이미지 가져 오는 곳 = registry server(hub.docker.com)
+	private cloud를 구성하여 registry 사용
+
+Docker 기본 network = bridge
+[root@node3 ~]# docker network ls
+NETWORK ID     NAME      DRIVER    SCOPE
+341fd9069756   bridge    bridge    local
+ddd23693070d   host      host      local
+16dbf1e47734   none      null      local
+
+[root@node3 ~]# docker network create nw01
+a98fb1a613d62d0e569c3ae30a8fb582341527f60de589e821e4075955dc8d01
+
+[root@node3 ~]# docker network ls
+NETWORK ID     NAME      DRIVER    SCOPE
+341fd9069756   bridge    bridge    local
+ddd23693070d   host      host      local
+16dbf1e47734   none      null      local
+a98fb1a613d6   nw01      bridge    local
+
+
+만일, host 환경으로 network 만들 경우 아래 파일을 그대로 가져옴
+	보통 host 의 경우는 docker network 을 그대로 가져와서 사용하므로, 보안에 취약
+	so, default = bridge
+
+[root@node3 ~]# cat /etc/hosts
+127.0.0.1   localhost localhost.localdomain localhost4 localhost4.localdomain4
+::1         localhost localhost.localdomain localhost6 localhost6.localdomain6
+10.100.0.104	master.example.com  master
+10.100.0.101	node1.example.com  node1
+10.100.0.102	node2.example.com  node2
+10.100.0.103	node3.example.com  node3
+10.100.0.105	docker.example.com  docker
+
+[root@node3 ~]# ip add
+1: lo: <LOOPBACK,UP,LOWER_UP> mtu 65536 qdisc noqueue state UNKNOWN group default qlen 1000
+    link/loopback 00:00:00:00:00:00 brd 00:00:00:00:00:00
+    inet 127.0.0.1/8 scope host lo
+       valid_lft forever preferred_lft forever
+    inet6 ::1/128 scope host 
+       valid_lft forever preferred_lft forever
+2: ens3: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc pfifo_fast state UP group default qlen 1000
+    link/ether 52:54:00:7c:5c:7b brd ff:ff:ff:ff:ff:ff
+    inet 10.100.0.103/24 brd 10.100.0.255 scope global noprefixroute ens3
+       valid_lft forever preferred_lft forever
+    inet6 fe80::5904:e5b:b5e:f453/64 scope link tentative noprefixroute dadfailed 
+       valid_lft forever preferred_lft forever
+    inet6 fe80::2cb:1461:a35f:616e/64 scope link tentative noprefixroute dadfailed 
+       valid_lft forever preferred_lft forever
+    inet6 fe80::3fa6:a689:2940:b015/64 scope link noprefixroute 
+       valid_lft forever preferred_lft forever
+3: docker0: <NO-CARRIER,BROADCAST,MULTICAST,UP> mtu 1500 qdisc noqueue state DOWN group default 
+    link/ether 02:42:f1:75:f7:71 brd ff:ff:ff:ff:ff:ff
+    inet 172.17.0.1/16 brd 172.17.255.255 scope global docker0
+       valid_lft forever preferred_lft forever
+4: br-a98fb1a613d6: <NO-CARRIER,BROADCAST,MULTICAST,UP> mtu 1500 qdisc noqueue state DOWN group default 
+    link/ether 02:42:e7:d7:39:e1 brd ff:ff:ff:ff:ff:ff
+    inet 172.18.0.1/16 brd 172.18.255.255 scope global br-a98fb1a613d6
+       valid_lft forever preferred_lft forever
+
+
+[root@node3 ~]# docker pull nginx
+Using default tag: latest
+latest: Pulling from library/nginx
+e5ae68f74026: Pull complete 
+21e0df283cd6: Pull complete 
+ed835de16acd: Pull complete 
+881ff011f1c9: Pull complete 
+77700c52c969: Pull complete 
+44be98c0fab6: Pull complete 
+Digest: sha256:9522864dd661dcadfd9958f9e0de192a1fdda2c162a35668ab6ac42b465f0603
+Status: Downloaded newer image for nginx:latest
+docker.io/library/nginx:latest
+
+[root@node3 ~]# docker info
+Client:
+ Context:    default
+ Debug Mode: false
+ Plugins:
+  app: Docker App (Docker Inc., v0.9.1-beta3)
+  buildx: Build with BuildKit (Docker Inc., v0.6.3-docker)
+  scan: Docker Scan (Docker Inc., v0.9.0)
+Server:
+ Containers: 0
+  Running: 0
+  Paused: 0
+  Stopped: 0
+ Images: 1
+ Server Version: 20.10.11
+ Storage Driver: overlay2
+  Backing Filesystem: xfs
+  Supports d_type: true
+  Native Overlay Diff: true
+  userxattr: false
+ Logging Driver: json-file
+ Cgroup Driver: cgroupfs
+ Cgroup Version: 1
+ Plugins:
+  Volume: local
+  Network: bridge host ipvlan macvlan null overlay
+  Log: awslogs fluentd gcplogs gelf journald json-file local logentries splunk syslog
+ Swarm: inactive
+ Runtimes: io.containerd.runc.v2 io.containerd.runtime.v1.linux runc
+ Default Runtime: runc
+ Init Binary: docker-init
+ containerd version: 7b11cfaabd73bb80907dd23182b9347b4245eb5d
+ runc version: v1.0.2-0-g52b36a2
+ init version: de40ad0
+ Security Options:
+  seccomp
+   Profile: default
+ Kernel Version: 3.10.0-1160.49.1.el7.x86_64
+ Operating System: CentOS Linux 7 (Core)
+ OSType: linux
+ Architecture: x86_64
+ CPUs: 2
+ Total Memory: 1.795GiB
+ Name: node3.example.com
+ ID: U5UA:QO4A:WX4O:TL6K:CLXM:QQ7L:B4UT:AB5A:5O5S:7RR3:ZLRC:IEXO
+ Docker Root Dir: /var/lib/docker
+ Debug Mode: false
+ Registry: https://index.docker.io/v1/
+ Labels:
+ Experimental: false
+ Insecure Registries:
+  127.0.0.0/8
+ Live Restore Enabled: false
+
+
+docker 중요 information
+	runc
+		도커의 기술 3가지를 만드는 역할: cgroup, chroot, namespace
+	Cgroup Driver: cgroupfs
+	Registry	
+		Registry: https://index.docker.io/v1/
+		 Insecure Registries:
+		  127.0.0.0/8
+		[root@node3 ~]# docker logout
+		Removing login credentials for https://index.docker.io/v1/
+			편집 불가능
+	network
+		bridge (default)
+	
+
+docker "ROOT" directory
+
+	/var/lib/docker/
+		docker 관련 모든 파일 저장
+
+	[root@node3 ~]# cd /var/lib/docker/
+	
+	[root@node3 docker]# ls
+	buildkit  containers  image  network  overlay2  plugins  runtimes  swarm  tmp  trust  volumes
+	
+	[root@node3 docker]# ll
+	total 4
+	drwx--x--x. 4 root root  120 Dec 12 22:35 buildkit
+	drwx--x---. 2 root root    6 Dec 12 22:35 containers
+	drwx------. 3 root root   22 Dec 12 22:35 image
+	drwxr-x---. 3 root root   19 Dec 12 22:35 network
+	drwx--x---. 9 root root 4096 Dec 13 00:15 overlay2
+	drwx------. 4 root root   32 Dec 12 22:35 plugins
+	drwx------. 2 root root    6 Dec 12 22:35 runtimes
+	drwx------. 2 root root    6 Dec 12 22:35 swarm
+	drwx------. 2 root root    6 Dec 13 00:15 tmp
+	drwx------. 2 root root    6 Dec 12 22:35 trust
+	drwx-----x. 2 root root   50 Dec 12 22:35 volumes
+
+	[root@node3 docker]# docker images
+	REPOSITORY   TAG       IMAGE ID       CREATED       SIZE
+	nginx        latest    f652ca386ed1   10 days ago   141MB
+		nginx 이미지는 nginx 에서 만들었지만,
+		latest 의 경우는 docker 회사에서 만든 것임
+			version 명시 방법
+				docker pull nginx:1.14
+			[root@node3 docker]# docker images
+			REPOSITORY   TAG       IMAGE ID       CREATED       SIZE
+			nginx        latest    f652ca386ed1   10 days ago   141MB
+			nginx        1.14      295c7be07902   2 years ago   109MB
+		docker가 gihub 에 commit 한 시점이 10일전인 latest 가 되는 것임
+	
+	nginx 이미지를 받아오면, 단지 파일만이 아니라, samll size 의 library 가 있는 OS가 같이 있는 이미지 임
+
+
+리눅스는 종류에 상관없이 동일 커널을 사용
+쉘은 ksh, csh, bash 
+	쉘라이브러리를 추가 가능
+	
+	[root@node3 docker]# ldd /bin/bash
+	linux-vdso.so.1 =>  (0x00007ffe2f9ef000)
+	libtinfo.so.5 => /lib64/libtinfo.so.5 (0x00007f6be4dc6000)
+	libdl.so.2 => /lib64/libdl.so.2 (0x00007f6be4bc2000)
+	libc.so.6 => /lib64/libc.so.6 (0x00007f6be47f4000)
+	/lib64/ld-linux-x86-64.so.2 (0x00007f6be4ff0000)
+	
+	"ls" 관련 라이브러리 보여줌
+	[root@node3 docker]# ldd /usr/bin/ls
+	linux-vdso.so.1 =>  (0x00007ffd32fcd000)
+	libselinux.so.1 => /lib64/libselinux.so.1 (0x00007fcec5292000)
+	libcap.so.2 => /lib64/libcap.so.2 (0x00007fcec508d000)
+	libacl.so.1 => /lib64/libacl.so.1 (0x00007fcec4e84000)
+	libc.so.6 => /lib64/libc.so.6 (0x00007fcec4ab6000)
+	libpcre.so.1 => /lib64/libpcre.so.1 (0x00007fcec4854000)
+	libdl.so.2 => /lib64/libdl.so.2 (0x00007fcec4650000)
+	/lib64/ld-linux-x86-64.so.2 (0x00007fcec54b9000)
+	libattr.so.1 => /lib64/libattr.so.1 (0x00007fcec444b000)
+	libpthread.so.0 => /lib64/libpthread.so.0 (0x00007fcec422f000)
+
+
+image 만들어진 상태
+	layer 구성을 됨
+		nginxd 실행 layer
+		nginx 설치 layer
+		환경변수 layer
+		OS layer
+	맨위를 제외하고는 모두 read only
+	맨위는 r/w layer
+	기존 만들어진 image 를 수정해서 자신만의 이미지 만듬
+		필요한 내용을 추가할때마다 layer 가 생성
+		= overlayfs - unionfs 라 부름
+
+init -> systemd
+	리눅스의 가장 큰 process (parents)
+	고아 프로세스의 경우 parent 가 없어지면, init 으로 연결
+[root@node3 lib64]# pstree
+systemd─┬─ModemManager───2*[{ModemManager}]
+        ├─NetworkManager───2*[{NetworkManager}]
+~~~~~~~~~~~
+        ├─containerd───7*[{containerd}]
+        ├─dockerd───8*[{dockerd}]
+
+
+docker 명령어를 치는 행위
+	/var/run/docker.sock
+		"docker.sock"파일이 명령어를 사용하게 되면, socket 통신을 통해 dockerd 가 명령어를 확인하고 parsing -> return 값을 반화
+
+
+docker process
+	containerd
+		컨테이너 lifecycle 관리- container creat/delete 등 의 전반적인 관리
+	containerd-shim (parent process)
+
+
+Docker 단점
+    "systemd" 밑에 process 로 붙어 있으므로,
+    1. root 권한이 있어야 docker 실행 가능
+    2. hub.docker.com 이 보안이 취약
+        official image 만 반드시 사용 해야 함(아무나 image 를 올리므로, docker 에서 보장하는 이미지만 사용하는것이 보안에 유리)
+    3. systemd 에 등록되어 있어 dockerd 가 문제 생길시 containerd 까지 영향을 미쳐 프로세스가 죽을 수 있음
+    cf> Redhat에서 Podman 을 만듬
+
+dockerd 가 죽으면, container 관련된 모든 기능 중지
+Podman 은 컨테이너와 연결되어 있지 않기 때문에, 문제가 발생해도 container 에 영향을 미치지 않음
+
+
+
+Docker inspect
+
+[root@node3 run]# docker inspect nginx
+[
+    {
+        "Id": "sha256:f652ca386ed135a4cbe356333e08ef0816f81b2ac8d0619af01e2b256837ed3e",
+        "RepoTags": [
+            "nginx:latest"
+        ],
+        "RepoDigests": [
+            "nginx@sha256:9522864dd661dcadfd9958f9e0de192a1fdda2c162a35668ab6ac42b465f0603"
+        ],
+        "Parent": "",
+        "Comment": "",
+        "Created": "2021-12-02T10:59:29.428210249Z",
+        "Container": "ff6520e1505fbd3417637e0055ad5d9df9741ef00ea2eb071a66edd455523786",
+        "ContainerConfig": {
+            "Hostname": "ff6520e1505f",
+            "Domainname": "",
+            "User": "",
+            "AttachStdin": false,
+            "AttachStdout": false,
+            "AttachStderr": false,
+            "ExposedPorts": {
+                "80/tcp": {}
+            },
+            "Tty": false,
+            "OpenStdin": false,
+            "StdinOnce": false,
+            "Env": [
+                "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+                "NGINX_VERSION=1.21.4",
+                "NJS_VERSION=0.7.0",
+                "PKG_RELEASE=1~bullseye"
+            ],
+            "Cmd": [
+                "/bin/sh",
+                "-c",
+                "#(nop) ",
+                "CMD [\"nginx\" \"-g\" \"daemon off;\"]"
+            ],
+            "Image": "sha256:8a8299cee5cdb563ce3a473654db88cf74cd8c85b1b930ae19e79efed345d260",
+            "Volumes": null,
+            "WorkingDir": "",
+            "Entrypoint": [
+                "/docker-entrypoint.sh"
+            ],
+            "OnBuild": null,
+            "Labels": {
+                "maintainer": "NGINX Docker Maintainers <docker-maint@nginx.com>"
+            },
+            "StopSignal": "SIGQUIT"
+        },
+        "DockerVersion": "20.10.7",
+        "Author": "",
+        "Config": {
+            "Hostname": "",
+            "Domainname": "",
+            "User": "",
+            "AttachStdin": false,
+            "AttachStdout": false,
+            "AttachStderr": false,
+            "ExposedPorts": {
+                "80/tcp": {}
+            },
+            "Tty": false,
+            "OpenStdin": false,
+            "StdinOnce": false,
+            "Env": [
+                "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+                "NGINX_VERSION=1.21.4",
+                "NJS_VERSION=0.7.0",
+                "PKG_RELEASE=1~bullseye"
+            ],
+            "Cmd": [
+                "nginx",
+                "-g",
+                "daemon off;"
+            ],
+            "Image": "sha256:8a8299cee5cdb563ce3a473654db88cf74cd8c85b1b930ae19e79efed345d260",
+            "Volumes": null,
+            "WorkingDir": "",
+            "Entrypoint": [
+                "/docker-entrypoint.sh"
+            ],
+            "OnBuild": null,
+            "Labels": {
+                "maintainer": "NGINX Docker Maintainers <docker-maint@nginx.com>"
+            },
+            "StopSignal": "SIGQUIT"
+        },
+        "Architecture": "amd64",
+        "Os": "linux",
+        "Size": 141490839,
+        "VirtualSize": 141490839,
+        "GraphDriver": {
+            "Data": {
+                "LowerDir": "/var/lib/docker/overlay2/2abe862e9a18a6ef510294b9d6baebb4baeb59429dbdc28859612728f0868553/diff:/var/lib/docker/overlay2/2fd63969927dff952d78384b2077133936922f88351823e8c4a2ef55597c4ab7/diff:/var/lib/docker/overlay2/967b39fdd9511acfce83eb8cb898b1bdb09f8f675ec4f0d16be1ccf22b4d3279/diff:/var/lib/docker/overlay2/686ee1d3d0f499da8aa5f39a8898d0cca4f809b6a07984742ea0c7ae850fd8bd/diff:/var/lib/docker/overlay2/d111cd575e4ff9522475734656fd7b4e5ceace543462e69a2a1c314631fc983c/diff",
+                "MergedDir": "/var/lib/docker/overlay2/c92f5147f7e4ff4f2f4e117231df1a22a3169fe38d5a4c8a97ae9ad372fca896/merged",
+                "UpperDir": "/var/lib/docker/overlay2/c92f5147f7e4ff4f2f4e117231df1a22a3169fe38d5a4c8a97ae9ad372fca896/diff",
+                "WorkDir": "/var/lib/docker/overlay2/c92f5147f7e4ff4f2f4e117231df1a22a3169fe38d5a4c8a97ae9ad372fca896/work"
+            },
+            "Name": "overlay2"
+        },
+        "RootFS": {
+            "Type": "layers",
+            "Layers": [
+                "sha256:9321ff862abbe8e1532076e5fdc932371eff562334ac86984a836d77dfb717f5",
+                "sha256:0664b7821b6050b321b14cdede97c2079ae45aff22beb4a42f7595294f5be62d",
+                "sha256:c9fcd9c6ced8b793a0ad4f93820c1d51d94c3b1fca93000d93e9e8eefa6fdb38",
+                "sha256:d3e1dca44e8225cdd06b6bf7cdfc847e3ab9f09ab6aeefb006e2e8f02f0dd26c",
+                "sha256:82caad489ad7bc7e1ae6f17bb1e9ade2bca44a41a07cc8c5587af8a2de2f536a",
+                "sha256:2bed47a66c07ecddfea2bc9c128d81b31272d99b69aff1fb4edc079c4dbf56e7"
+            ]
+        },
+        "Metadata": {
+            "LastTagTime": "0001-01-01T00:00:00Z"
+        }
+    }
+]
+
+
+===== Container실행
+
+[root@node3 run]# docker pull nginx
+Using default tag: latest
+latest: Pulling from library/nginx
+Digest: sha256:9522864dd661dcadfd9958f9e0de192a1fdda2c162a35668ab6ac42b465f0603
+Status: Image is up to date for nginx:latest
+docker.io/library/nginx:latest
+
+[root@node3 run]# docker images
+REPOSITORY   TAG       IMAGE ID       CREATED       SIZE
+nginx        latest    f652ca386ed1   10 days ago   141MB
+nginx        1.14      295c7be07902   2 years ago   109MB
+[root@node3 run]# docker run -d --name web nginx
+19ef0df1fb42e67c822c3f16fe280bfb6ad5f8b462d0e76fb19633687f057001
+
+[root@node3 run]# docker ps
+CONTAINER ID   IMAGE     COMMAND                  CREATED         STATUS         PORTS     NAMES
+19ef0df1fb42   nginx     "/docker-entrypoint.…"   3 seconds ago   Up 2 seconds   80/tcp    web
+
+
+
+﻿
+
+﻿
+
+﻿===== 자신의 container image 만들기
+
+﻿[root@node3 run]# docker exec -it web /bin/bash
+
+root@19ef0df1fb42:/# cat /etc/hosts
+127.0.0.1    localhost
+::1    localhost ip6-localhost ip6-loopback
+fe00::0    ip6-localnet
+ff00::0    ip6-mcastprefix
+ff02::1    ip6-allnodes
+ff02::2    ip6-allrouters
+172.17.0.2    19ef0df1fb42
+
+root@19ef0df1fb42:/# cd /usr/share/nginx/html/
+root@19ef0df1fb42:/usr/share/nginx/html#
+root@19ef0df1fb42:/usr/share/nginx/html# cat index.html
+<!DOCTYPE html>
+<html>
+<head>
+<title>Welcome to nginx!</title>
+<style>
+html { color-scheme: light dark; }
+body { width: 35em; margin: 0 auto;
+font-family: Tahoma, Verdana, Arial, sans-serif; }
+</style>
+</head>
+<body>
+<h1>Welcome to nginx!</h1>
+<p>If you see this page, the nginx web server is successfully installed and
+working. Further configuration is required.</p>
+
+<p>For online documentation and support please refer to
+<a href="http://nginx.org/">nginx.org</a>.<br/>
+Commercial support is available at
+<a href="http://nginx.com/">nginx.com</a>.</p>
+
+<p><em>Thank you for using nginx.</em></p>
+</body>
+</html>
+root@19ef0df1fb42:/usr/share/nginx/html#
+root@19ef0df1fb42:/usr/share/nginx/html# echo "Test Web" > index.html
+root@19ef0df1fb42:/usr/share/nginx/html# cat index.html
+Test Web
+
+﻿
+
+﻿<<<<< 반드시 ctrl + p,q 눌러야 함 >>>>>
+
+﻿<-- exit 로 나올경우 process 종료 됨
+
+﻿
+
+﻿root@19ef0df1fb42:/usr/share/nginx/html# read escape sequence
+[root@node3 run]#
+[root@node3 run]# curl 172.17.0.2
+Test Web
+
+﻿
+
+﻿
+
+﻿===== Docker configuration 파일
+xxx.json 파일명
+	deamon.json
+
+
+
+
+
+===== Docker images 생성
+
+﻿web 컨테이너를 nginx:v1 이미지로 commit 수행
+
+[root@node3 admin]# docker commit web nginx:v1
+sha256:0530fe3dff81746cff9777cf55aa91518718fd498d599b6bafd617e85c7655c7
+[root@node3 admin]# docker images
+REPOSITORY   TAG       IMAGE ID       CREATED         SIZE
+nginx        v1        0530fe3dff81   2 seconds ago   141MB
+nginx        latest    f652ca386ed1   10 days ago     141MB
+nginx        1.14      295c7be07902   2 years ago     109MB
+
+
+hub.docker.com 에 이미지 push
+
+[root@node3 admin]# docker login
+Login with your Docker ID to push and pull images from Docker Hub. If you don't have a Docker ID, head over to https://hub.docker.com to create one.
+Username: out8484
+Password: 
+WARNING! Your password will be stored unencrypted in /root/.docker/config.json.
+Configure a credential helper to remove this warning. See
+https://docs.docker.com/engine/reference/commandline/login/#credentials-store
+Login Succeeded
+[root@node3 admin]# 
+
+[root@node3 admin]# docker push nginx:v1 
+The push refers to repository [docker.io/library/nginx]
+29f85efa1706: Preparing 
+2bed47a66c07: Preparing 
+82caad489ad7: Preparing 
+d3e1dca44e82: Preparing 
+c9fcd9c6ced8: Preparing 
+0664b7821b60: Waiting 
+9321ff862abb: Waiting 
+denied: requested access to the resource is denied
+[root@node3 admin]# 
+
+
+hub.docker.com 내 access 불가 하다고 나옴
+	이미지 이름에 계정 ID 가 들어 가야 함
+		<ID>/<이미지이름>
+
+[root@node3 admin]# docker tag nginx:v1 out8484/nginx:v1
+
+[root@node3 admin]# docker images
+REPOSITORY      TAG       IMAGE ID       CREATED         SIZE
+nginx           v1        0530fe3dff81   6 minutes ago   141MB
+out8484/nginx   v1        0530fe3dff81   6 minutes ago   141MB
+nginx           latest    f652ca386ed1   10 days ago     141MB
+nginx           1.14      295c7be07902   2 years ago     109MB
+
+[root@node3 admin]# docker push out8484/nginx:v1
+The push refers to repository [docker.io/out8484/nginx]
+29f85efa1706: Pushed 
+2bed47a66c07: Mounted from library/nginx 
+82caad489ad7: Mounted from library/nginx 
+d3e1dca44e82: Mounted from library/nginx 
+c9fcd9c6ced8: Mounted from library/nginx 
+0664b7821b60: Mounted from library/nginx 
+9321ff862abb: Mounted from library/nginx 
+v1: digest: sha256:dcc9c9f87c974e2902dc61c889ac7d9393397c54529cd7970650065a13c5fff8 size: 1777
+
+hum.docker.com 내 업로드 이미지 확인
+	http://hub.docker.com
+		로그인 필요
+
+container 의 목적은 application image 를 만들어서 서비스 제공을 위함임
+	image build (코드 후 commit 으로 image 생성)
+	image upload (push 로 업로드)
+	image 배포 (pull 로 받아와서 서비스 배포)
+
+
+
+
+
+===== docker file
+단일 container image 를 만들기위한 절차서 (container 를 만들기 위한 image 이지, container 자체는 아님)
+	docker file
+
+
+멀티 container image 만들기 위한 절차서
+	docker-compose 
+		xxx.yml
+	k8s
+		xxx.yaml
+
+
+문법이 존재
+	#	주석
+	대문자	명령어
+	FROM	base image	대부분 OS 인 경우가 많음(cf: nginx 의 경우 os layer 같이 포함되어 있음)
+	RUN	실행 명령어	ex: ubuntu 의 경우 apt get 등
+		RUN apt-get update-y		쉘모드
+		RUN ["apt-get" "update-y]	exec 모드
+	CMD		CMD ls 는 컨테이너 실행시 ls 가 다른 명령어로 치환 가능, 컨테이너 동작시 실행할 서비스나 스크립트 지정
+	ENTRYPOINT	그 명령에 충실, ENTRYPOINT ls -> ls 명령어 무조건 실행 함
+	VOLUME		process 로 떠있는 container 에게 volume 구성하여, host machine 에 data 저장
+
+
+docker file 이용하여 image 생성
+
+[root@node3 ~]# mkdir test
+
+[root@node3 ~]# cd test/
+[root@node3 test]# vi dockerfile
+
+[root@node3 test]# more dockerfile 
+FROM centos:7
+ENTRYPOINT ["bin/echo", "hello"]
+CMD ["world"]
+
+[root@node3 test]# docker build -t test .
+Sending build context to Docker daemon  2.048kB
+Step 1/3 : FROM centos:7
+7: Pulling from library/centos
+2d473b07cdd5: Pull complete 
+Digest: sha256:9d4bcbbb213dfd745b58be38b13b996ebb5ac315fe75711bd618426a630e0987
+Status: Downloaded newer image for centos:7
+ ---> eeb6ee3f44bd
+Step 2/3 : ENTRYPOINT ["bin/echo", "hello"]
+ ---> Running in 0f80b449ae2c
+Removing intermediate container 0f80b449ae2c
+ ---> aa5dc09e6252
+Step 3/3 : CMD ["world"]
+ ---> Running in a445a9312cb2
+Removing intermediate container a445a9312cb2
+ ---> 503795503344
+Successfully built 503795503344
+Successfully tagged test:latest
+
+[root@node3 test]# docker images
+REPOSITORY      TAG       IMAGE ID       CREATED          SIZE
+test            latest    503795503344   54 seconds ago   204MB
+nginx           v1        0530fe3dff81   44 minutes ago   141MB
+out8484/nginx   v1        0530fe3dff81   44 minutes ago   141MB
+nginx           latest    f652ca386ed1   10 days ago      141MB
+centos          7         eeb6ee3f44bd   2 months ago     204MB
+nginx           1.14      295c7be07902   2 years ago      109MB
+
+[root@node3 test]# docker run test
+hello world
+
+<<<<< CMD 사용하게 되면, "aaa" 명령어를 수행가능 하게 됨 (world 대신 aaa 가 출력)
+
+[root@node3 test]# docker run test aaa
+hello aaa
+
+
+nodejs 이미지 만든 후 업로그
+
+[root@node3 ~]# mkdir build
+[root@node3 ~]# cd build/
+
+[root@node3 build]# vi hello.js
+
+[root@node3 build]# more dockerfile 
+FROM node:12
+COPY hello.js /
+CMD ["node","hello.js"]
+
+[root@node3 build]# ls -al
+total 12
+drwxr-xr-x.  2 root root   40 Dec 13 03:40 .
+dr-xr-x---. 19 root root 4096 Dec 13 03:37 ..
+-rw-r--r--.  1 root root   54 Dec 13 03:40 dockerfile
+-rw-r--r--.  1 root root  360 Dec 13 03:38 hello.js
+
+[root@node3 build]# chmod 755 hello.js 
+
+[root@node3 build]# ls -al
+total 12
+drwxr-xr-x.  2 root root   40 Dec 13 03:40 .
+dr-xr-x---. 19 root root 4096 Dec 13 03:37 ..
+-rw-r--r--.  1 root root   54 Dec 13 03:40 dockerfile
+-rwxr-xr-x.  1 root root  360 Dec 13 03:38 hello.js
+
+[root@node3 build]# docker build -t hellojs:latest .
+Sending build context to Docker daemon  3.072kB
+Step 1/3 : FROM node:12
+12: Pulling from library/node
+a44d60f8dd45: Pull complete 
+6368c5e70521: Pull complete 
+4c54a7a0d119: Pull complete 
+2c33912b65a4: Pull complete 
+606725a9d1d2: Pull complete 
+7a25133c4863: Pull complete 
+601f6e208f61: Pull complete 
+0ce68032b66d: Pull complete 
+0d23fc202334: Pull complete 
+Digest: sha256:eb92ed2473762b6d11736a4b4345aa3ef68f773999fe633bc4d9c91fa5d8f9d6
+Status: Downloaded newer image for node:12
+ ---> b41254f97d37
+Step 2/3 : COPY hello.js /
+ ---> 6c9883191ace
+Step 3/3 : CMD ["node","hello.js"]
+ ---> Running in cb22c7811581
+Removing intermediate container cb22c7811581
+ ---> 82c7e0ce0f11
+Successfully built 82c7e0ce0f11
+Successfully tagged hellojs:latest
+
+[root@node3 build]# docker tag hellojs:latest out8484/hellojs:v1
+
+[root@node3 build]# docker push out8484/hellojs:v1
+The push refers to repository [docker.io/out8484/hellojs]
+e1053e376b26: Pushed 
+b0afbcc76ce7: Mounted from library/node 
+473c00c5bb02: Mounted from library/node 
+e9a51900f556: Mounted from library/node 
+55823126b05f: Mounted from library/node 
+91eb86c8ecf7: Mounted from library/node 
+f3e1b4e2605e: Mounted from library/node 
+0acac778a9df: Mounted from library/node 
+702f151bcfb1: Mounted from library/node 
+577c48e0521b: Mounted from library/node 
+v1: digest: sha256:9d0d35954431c640d79b71bf18b0790054d189923e94946b34924d32ad7cd4c4 size: 2422
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+	
