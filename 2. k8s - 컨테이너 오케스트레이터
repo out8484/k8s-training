@@ -1,0 +1,572 @@
+MSP (multicloud service provider
+	CSP 구분 없이 고객이 원하는 대쉬보드 운영 환경 제공
+	ex: 하이마트
+	메가존 클라우드, 베스핀 글로벌
+		MSP 외 AI, IOT, 빅데이터등의 자체 솔루션 보유
+
+
+
+
+
+===== k8s 기본
+namespace 가 가장 큰 의미로 윈도우의 논리적 디스크 D: 파티션으로 볼 수 있음
+
+
+
+
+
+
+===== k8s 설치
+CNCF
+	cloud native computing foundation
+	클라우드의 표준을 정의
+		gRPC, CLI 등
+
+
+kubeadm: 클러스터를 부트스트랩하는 명령이다.
+
+kubelet: 클러스터의 모든 머신에서 실행되는 파드와 컨테이너 시작과 같은 작업을 수행하는 컴포넌트이다.
+	worker 내에서는 master 와 통신하는 방법
+	worker 내에서 가장 중요
+
+kubectl: 명령어, 클러스터와 통신하기 위한 커맨드 라인 유틸리티이다.
+
+
+
+
+
+===== k8s
+pod
+	하나의 pod = 하나의 IP = 하나의 hostname
+	하나 또는 여러개의 container 포함
+	k8s 의 최소 단위
+
+
+container
+	프로세스 --> 불안정함
+
+
+도커의 cgroup 드라이버(cgroupfs)와 k8s의 cgroup 드라이버(systemd)가 다름
+	cgroupfs vs systemd
+		위 2개 중 하나로 통일 하면 됨
+		https://kubernetes.io/docs/setup/production-environment/container-runtimes/
+			"exec-opts": ["native.cgroupdriver=systemd"] <<-- 드라이버 변경
+
+sudo mkdir /etc/docker
+cat <<EOF | sudo tee /etc/docker/daemon.json
+{
+	 "exec-opts": ["native.cgroupdriver=systemd"],
+	 "log-driver": "json-file",
+	 "log-opts": {
+		  "max-size": "100m"
+  },
+	"storage-driver": "overlay2"
+}
+EOF
+
+[root@node3 ~]# docker info
+~~~~~
+ Cgroup Driver: cgroupfs
+
+
+k8s 설치시 문제 발생할 경우 
+	kubeadm reset
+		환경 설정 리셋 (master, worker)
+	kubeadm init
+		master only
+
+
+k8s token key
+	설치 중에 나옴
+	master - worker 간 통신 위해 사용 ( server - client 방식)
+kubeadm join 10.100.0.104:6443 --token 29xdd5.nwkzzvpv2of5tc6k \
+	--discovery-token-ca-cert-hash sha256:d0305284d3575b5d925b70ed96d93f003d8950f3f7daab8a60a241018f0fb737 
+	
+	24시간 지나면 사라지므로, 향후 work node 추가할 경우 token key 새로 생성 필요
+
+		kubeadm join <master IP>:6443 --token <token value> --discovery-token-ca-cert sha256:<hash value>
+
+
+토큰키는 24시간이 지나면 사라집니다
+향후에 추가적인 work node를 추가 할때는 그래서 새로 token를 생성해주셔야 합니다 
+
+kubeadm join <master IP>:6443 --token <토큰값> --discovery-token-ca-cert-hash sha256:<해쉬값>
+
+토큰값 확인 방법
+kubeadm token list로  확인합니다 
+생성은 
+kubeadm token create 
+
+아래는 해쉬값을 찾는 명령어 입니다 
+openssl x509 -pubkey -in /etc/kubernetes/pki/ca.crt | openssl rsa -pubin -outform der 2>/dev/null | openssl dgst -sha256 -hex | sed 's/^.* //'
+
+
+
+
+===== k8s networking
+k8s 네트워크 서비스
+	k8s 에서는 따로 지원하지 않아므로, CNI 를 설치하는 것임
+	https://kubernetes.io/docs/concepts/cluster-administration/addons/
+		설치방법
+		calico 많이 사용 - weave net - flannel - cilium
+	CNI 는 master node 에만 설치
+	
+
+
+
+
+===== k8s container 관리
+container 는 하나의 process 로 k8s 에서는 pod 에 특정 기능을 넣어서, container 가 죽지 않게 만듬
+
+
+kubeadm
+	config init, reset
+
+kubelet
+	node ~ master 간 통신 담당
+
+kubectl
+	k8s 명령어
+	https://kubernetes.io/docs/reference/kubectl/cheatsheet/
+[root@master docker]# alias k=kubectl
+[root@master docker]# source <(kubectl completion bash)
+[root@master docker]# echo "source <(kubectl completion bash)" >> ~/.bashrc 
+[root@master docker]# alias k=kubectl
+[root@master docker]# complete -F __start_kubectl k
+
+
+
+
+
+===== k8s = 컨테이너 오케스트레이션이란?
+
+컨테이너 배포, 관리, 확장, 네트워킹 자동화
+	LB, rollout, 병렬처리, scale out/in, lifecycle, CI/CD
+
+
+control plan
+	node 관리, HA cluster 구성 
+	API server는 LB를 통해 node 를 외부에 노출
+
+worker node
+	컨테이너를 동작 시키며, 실제 서비스 제공
+
+프랜차이즈 사장님 - 부사장님 - 임원 - 감사매니저 - 각지점매니저 - 직원
+	사장님: kubectl
+	부사장님: API server - 임원들에게 문의
+	감사매니저: Controller - 본사 정책 잘 지키는지 감시, 관리 후 report to 부사장,사장	- deployment, rc 등
+	임원: Scheduler - 각 매장 서비스 분포도 확인 후 적절하게 지역 분산
+
+ectd
+	본사 DB - 각 매장 정보/지역/판매상품/특징
+work node
+	지역 센터
+kubelet
+	지역 센터 매니저
+	본사 정책을 통해 각 매장에 전달 
+docker
+	지역 내 매장 설치
+		image 있으면, 컨테이너 만들고, 없을 경우 image pulling 함
+pod
+	각 매장
+
+Master Node
+	API		-k8s의 API 사용하도록 요청을 받고 요청이 유효한지 검사
+	Schedular	-pod 를 실행할 노드 선택
+	Controller	-pod 를 관찰하며 갯수를 보장
+	etcd
+		node 들의 상태정보, container 가 동작중인 상태 등
+		key: value 로 구성되어 있는 저장소
+			dictionary 타입
+예> 영어사전 - 알파벳:단어 - 알파벳은 수정 불가 but 단어는 삭제 가능
+	log-driver	- 삭제/수정 불가
+	json-file	- 삭제/수정 가능
+{
+  "exec-opts": ["native.cgroupdriver=systemd"],
+  "log-driver": "json-file",
+  "log-opts": {
+    "max-size": "100m"
+  },
+  "storage-driver": "overlay2"
+}
+
+
+Worker Node
+	kubelete	- 모든 node 에서 실행되는 k8s 에이전트로 master 와 통신
+		docker 에 명령을 내려서 일을 하게 함
+	cAdvisor	- container 모니터링 툴, kubelet 안에 포함됨
+	kube-proxy	- n/w을 관리
+
+	
+
+
+
+===== k8s 명령어
+
+kubectl	[command]	[type]	[name]	[flag]
+	명령어		자원타입
+
+k api resources
+k explain pod
+k describe node ....
+k describe pod ...
+k describe service ...
+
+
+k describe node master.example.com
+	label, 자원(cpu, memory, network 등)
+	namespace
+
+
+container 생성
+
+[root@master docker]# kubectl run webserver --image=nginx --port 80
+pod/webserver created
+<< -- master 에서는 만든것만 나옴, node 어디에서 running 하고 있는 알아야 함
+	정상이던 에러가 발생했던, create 만 나옴
+	kubectl describe pod webserver 를 통해 어떤 node 에서 running 되는지 알 수 있음
+
+[root@master docker]# kubectl get pods
+NAME        READY   STATUS    RESTARTS   AGE
+webserver   1/1     Running   0          78s
+	READY
+	1/1	- container 1개가 pod 내 존재 한다는 의미
+	1개 중에 1개가 ready	- 에어컨 온도 조절과 같이 순차적으로 올림 20C -> 21C -> 22C
+	ex:2/2 라면, pod 내 2개의 container 가 있고, 2개 모두 동작 중 (ready)
+
+[root@master docker]# kubectl get pods -o wide
+NAME        READY   STATUS    RESTARTS   AGE   IP          NODE                NOMINATED NODE   READINESS GATES
+webserver   1/1     Running   0          83s   10.46.0.2   node1.example.com   <none>           <none>
+
+[root@master docker]# more /etc/hosts
+127.0.0.1   localhost localhost.localdomain localhost4 localhost4.localdomain4
+::1         localhost localhost.localdomain localhost6 localhost6.localdomain6
+10.100.0.104	master.example.com  master
+10.100.0.101	node1.example.com  node1
+10.100.0.102	node2.example.com  node2
+10.100.0.103	node3.example.com  node3
+10.100.0.105	docker.example.com  docker
+
+
+
+
+kubectl describe pod webserver
+	pod 정보에 대한 상세 항목 보여줌
+
+[root@master docker]# kubectl describe pod webserver
+Node:         node1.example.com/10.100.0.101
+
+<<-- schedular 에 의해 node 선택 후 docker 를 통해 container "webserver" 를 생성함
+
+Containers:
+  webserver:
+    Container ID:   docker://312fd0ce7fffbd2f9b8e08159b957b2b9cb78465b9ffa9916453d84bdef05525
+    Image:          nginx
+    Image ID:       docker-pullable://nginx@sha256:9522864dd661dcadfd9958f9e0de192a1fdda2c162a35668ab6ac42b465f0603
+    Port:           80/TCP
+
+Events:
+  Type    Reason     Age    From               Message
+  ----    ------     ----   ----               -------
+  Normal  Scheduled  7m12s  default-scheduler  Successfully assigned default/webserver to node1.example.com
+<<-- schedular 에 의해 node 지정
+  Normal  Pulling    7m12s  kubelet            Pulling image "nginx"
+  Normal  Pulled     7m1s   kubelet            Successfully pulled image "nginx" in 10.361659421s
+<<-- kubelet 이 docker에 요청하여 image 받아옴
+  Normal  Created    7m1s   kubelet            Created container webserver
+  Normal  Started    7m1s   kubelet            Started container webserver
+<<- pod(container) 서비스 시작
+
+
+kubectl edit pod webserver
+	pod 정보 수정
+
+
+k exec -it webserver -- /bin/bash
+	pod 내 접속
+[root@master docker]# k exec -it webserver -- /bin/bash
+root@webserver:/# 
+root@webserver:/# 
+
+
+
+
+
+===== 자신이 만든 이미지를 불러와서 k8s 에 pod 실행하기
+hob.docker.com 에 이미지 올리는 선작업 필요
+	docker pull nginx
+	docker images
+	docker run -d --name web nginx
+	docker ps
+	docker exec -it web /bin/bash
+		파일 수정 후 ctrl + p, q
+	docker commit web nginx:v1
+	docker login
+	docker tag nginx:v1 out8484/nginx:v1
+		hum.docker.com 내 업로드 이미지 확인
+
+which node run the image?
+	kubectl run webserver --image=out8484/nginx --port 80
+	<<-- 계정/image이름
+
+Check the IPaddress
+	kubectl describe webserver
+	or
+	k get pods -o wide
+	
+adjust index.html
+	k exec -it webserver -- /bin/bash
+		container 들어가서 수정
+
+excute curl http://localhost
+
+
+k delete pods webserver1
+k delete pods --all
+
+
+실시간 상태 확인 명령어 watch
+	watch kubectl get pod webserver -o wide
+
+
+
+
+
+===== k8s 특성
+
+node 에서 pod 삭제시에는 /pause pod 로 인해 재 생성 및 실행 됨
+	master 에서 pod 삭제 필요
+	/pause 는 하나의 프로세스로 node 에서 삭제되는 pod 에 대해 재 구동하게 하고, garbage 를 지우는 역할
+
+container가 실행되고 있는 node 에 접속
+	87a965da6072
+[root@node3 docker]# docker ps
+CONTAINER ID   IMAGE                                   COMMAND                  CREATED             STATUS             PORTS     NAMES
+87a965da6072   out8484/nginx                           "/docker-entrypoint.…"   9 minutes ago       Up 9 minutes                 k8s_webserver_webserver_default_c1fde813-ab46-40e5-8d3d-8b116e4b75c8_0
+
+
+container 강제 삭제
+
+[root@node3 docker]# docker rm -f 87a965da6072
+87a965da6072
+
+
+container 다시 생성
+	7b6408e4ae42
+
+[root@node3 docker]# docker ps | egrep webserver
+7b6408e4ae42   out8484/nginx                           "/docker-entrypoint.…"   6 seconds ago       Up 6 seconds                 k8s_webserver_webserver_default_c1fde813-ab46-40e5-8d3d-8b116e4b75c8_1
+
+
+master 에서 pod 상태 확인
+	"RESTARTS" 1 로 변경되기만 하고, container 는 존재
+
+[root@master docker]# k get pods
+NAME        READY   STATUS    RESTARTS   AGE
+webserver   1/1     Running   1          16m
+
+
+container 실행시에는 /pause 라는 pod 가 항상 같이 생성됨
+
+[root@node3 docker]# docker ps
+CONTAINER ID   IMAGE                                   COMMAND                  CREATED              STATUS              PORTS     NAMES
+7b6408e4ae42   out8484/nginx                           "/docker-entrypoint.…"   About a minute ago   Up About a minute             k8s_webserver_webserver_default_c1fde813-ab46-40e5-8d3d-8b116e4b75c8_1
+a2ccdbbb03cc   k8s.gcr.io/pause:3.6                    "/pause"                 13 minutes ago       Up 13 minutes                 k8s_POD_webserver_default_c1fde813-ab46-40e5-8d3d-8b116e4b75c8_1
+
+
+dry-run
+	실행이 잘 되는지 확인하는 옵션
+
+[root@master docker]# k run webserver1 --image=nginx:1.14 --port 8080 --dry-run=client
+pod/webserver1 created (dry run)
+
+[root@master docker]# k get pod
+NAME        READY   STATUS    RESTARTS   AGE
+webserver   1/1     Running   1          28m
+<<-- pod 생성되지 않고, 실행여부만 확인
+
+
+
+
+
+===== yml 사용
+
+k get pod webserver -o yaml
+
+k get pod webserver -o json
+
+
+dry-run 으로 pod 실행 여부 확인 후 yaml 파일로 만듬
+
+[root@master docker]# k run webserver1 --image=nginx:1.14 --port 8080 --dry-run=client -o yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  creationTimestamp: null
+  labels:
+    run: webserver1
+  name: webserver1
+spec:
+  containers:
+  - image: nginx:1.14
+    name: webserver1
+    ports:
+    - containerPort: 8080
+    resources: {}
+  dnsPolicy: ClusterFirst
+  restartPolicy: Always
+status: {}
+
+
+[root@master docker]# k run webserver1 --image=nginx:1.14 --port 8080 --dry-run=client -o yaml > nginx.yaml
+
+[root@master docker]# ls
+daemon.json  key.json  nginx.yaml
+
+아래 yaml 파일을 수정 후 create 명령어로 pod 생성 가능
+
+[root@master docker]# more nginx.yaml 
+apiVersion: v1
+kind: Pod
+metadata:
+  labels:
+    run: webserver1
+  name: webserver1
+spec:
+  containers:
+  - image: nginx:1.14
+    name: webserver1
+    ports:
+    - containerPort: 808080
+    resources: {}
+  dnsPolicy: ClusterFirst
+  restartPolicy: Always
+status: {}
+
+[root@master docker]# k create -f nginx.yaml 
+
+
+k cluster-info
+	클러스터 정보 보여줌
+Kubernetes control plane is running at https://10.100.0.104:6443
+CoreDNS is running at https://10.100.0.104:6443/api/v1/namespaces/kube-system/services/kube-dns:dns/proxy
+
+
+
+
+
+===== yaml 을 이용한 k8s 서비스 생성
+https://yaml.org/
+
+yaml 을 만드는 이유
+	유지보수, 관리를 위한 목적
+
+들여쓰기
+	기본 2칸, 4칸 까지 들여쓰기 가능
+"-"배열
+	문자로 여러개 나열
+scalar 문법
+	":" 기준으로, key : value 설정
+
+[root@master ~]# k get pod webserver -o yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  creationTimestamp: "2021-12-14T07:34:12Z"
+  labels:
+    run: webserver
+  name: webserver
+
+
+CLI에서 자동으로 yaml 을 만드는 서비스
+	pod, deployment
+	deployment 는 다른 서비스 
+		rs(ReplicaSet), rc(ReplicationController) 와 거의 동일한 구조
+			"VERSION" 이 다르므로, yaml 작성 시 주의
+	
+[root@master ~]# k explain rs
+KIND:     ReplicaSet
+VERSION:  apps/v1
+
+[root@master ~]# k explain rc
+KIND:     ReplicationController
+VERSION:  v1
+
+
+
+
+
+===== pod
+k8s 가장 최소 서비스 단위
+	하나의 컨테이너 또는 다수의 컨테이너로 구성 가능
+	ONE ip, ONE hostname
+
+하나의 pod 내에 여러개의 container 사용 하는 이유
+	하나의 server 내에 여러개의 서비스를 올리는 것과 동일
+	80 port	- web
+	21 port	- ftp
+	
+
+[root@master ~]# more multipod.yaml 
+apiVersion: v1
+kind: Pod
+metadata:
+  name: multipod
+spec:
+  containers:
+  - name: nginx-container
+    image: nginx:1.14
+    ports:
+    - containerPort: 80
+  - name: centos-container
+    image: centos:7
+    command:
+    - sleep
+    - "10000"
+
+[root@master ~]# k create -f multipod.yaml 
+
+[root@master ~]# k get pod
+NAME       READY   STATUS    RESTARTS   AGE
+multipod   2/2     Running   0          2m15s
+
+
+[root@master ~]# k describe pod multipod
+~~~~~
+Events:
+  Type    Reason     Age   From               Message
+  ----    ------     ----  ----               -------
+  Normal  Scheduled  33m   default-scheduler  Successfully assigned default/multipod to node1.example.com
+<<-- schedule 가 node 에 job 할당 = schedular 가 알려 주면, API 서버에서 node 에 job 할당 함 -> docker 가 생성/실행
+  Normal  Pulled     33m   kubelet            Container image "nginx:1.14" already present on machine
+<<-- local 에 image 가 있으면, hub.docker.com 을 방문하지 않음
+  Normal  Created    33m   kubelet            Created container nginx-container
+  Normal  Started    33m   kubelet            Started container nginx-container
+  Normal  Pulling    33m   kubelet            Pulling image "centos:7"
+  Normal  Pulled     32m   kubelet            Successfully pulled image "centos:7" in 11.528821279s
+  Normal  Created    32m   kubelet            Created container centos-container
+  Normal  Started    32m   kubelet            Started container centos-container
+
+
+pod 내 여러 container 존재시 각 container 에 접속 방법
+	동일 pod 내 서로 다른 container 내에서 IP, hostname 을 바꾸게 되면, 모든 container 들에 동일하게 적용 됨
+[root@master ~]# cat multipod.yaml 
+apiVersion: v1
+kind: Pod
+metadata:
+  name: multipod
+spec:
+  containers:
+  - name: nginx-container
+    image: nginx:1.14
+    ports:
+    - containerPort: 80
+  - name: centos-container
+    image: centos:7
+    command:
+    - sleep
+    - "1000"
+
+[root@master ~]# k exec -it multipod -c centos-container -- /bin/bash
+
+	
