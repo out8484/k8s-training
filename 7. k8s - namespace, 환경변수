@@ -1,1 +1,219 @@
+===== namespace
+
+k8s 클러스트 하나를 용도에 따라 여러 사용자가 공유
+	용도에 따라 application 구분 시
+
+
+k[root@master ~]# k get pods --all-namespaces
+NAMESPACE              NAME                                         READY   STATUS    RESTARTS        AGE
+default                nginx                                        1/1     Running   0               114m
+default                nginxpod                                     1/1     Running   0               112m
+kube-system            coredns-64897985d-65kpl                      1/1     Running   3 (23h ago)     3d
+kube-system            coredns-64897985d-z7s7k                      1/1     Running   3 (23h ago)     3d
+kube-system            etcd-master.example.com                      1/1     Running   5 (23h ago)     3d
+kube-system            kube-apiserver-master.example.com            1/1     Running   38 (23h ago)    3d
+kube-system            kube-controller-manager-master.example.com   1/1     Running   150 (23h ago)   3d
+kube-system            kube-proxy-c9fwr                             1/1     Running   3 (23h ago)     3d
+kube-system            kube-proxy-g9rxw                             1/1     Running   3 (23h ago)     3d
+kube-system            kube-proxy-mqxr9                             1/1     Running   3 (23h ago)     3d
+kube-system            kube-proxy-s2p8v                             1/1     Running   3 (23h ago)     3d
+kube-system            kube-scheduler-master.example.com            1/1     Running   139 (23h ago)   3d
+kube-system            weave-net-gd8dg                              2/2     Running   9 (23h ago)     3d
+kube-system            weave-net-hpzp2                              2/2     Running   8 (23h ago)     3d
+kube-system            weave-net-xf9gh                              2/2     Running   8 (23h ago)     3d
+kube-system            weave-net-zdbpj                              2/2     Running   8 (23h ago)     3d
+kubernetes-dashboard   dashboard-metrics-scraper-799d786dbf-ckhrc   1/1     Running   3 (23h ago)     2d23h
+kubernetes-dashboard   kubernetes-dashboard-6b6b86c4c5-jlrr4        1/1     Running   117 (23h ago)   2d23h
+
+[root@master ~]# k cluster-info
+Kubernetes control plane is running at https://10.100.0.104:6443
+CoreDNS is running at https://10.100.0.104:6443/api/v1/namespaces/kube-system/services/kube-dns:dns/proxy
+To further debug and diagnose cluster problems, use 'kubectl cluster-info dump'.
+
+
+[root@master ~]# k create namespace -h
+Create a namespace with the specified name.
+
+Aliases:
+namespace, ns
+
+Examples:
+  # Create a new namespace named my-namespace
+  kubectl create namespace my-namespace
+
+Options:
+      --allow-missing-template-keys=true: If true, ignore any errors in templates when a field or
+map key is missing in the template. Only applies to golang and jsonpath output formats.
+      --dry-run='none': Must be "none", "server", or "client". If client strategy, only print the
+object that would be sent, without sending it. If server strategy, submit server-side request
+without persisting the resource.
+      --field-manager='kubectl-create': Name of the manager used to track field ownership.
+  -o, --output='': Output format. One of:
+json|yaml|name|go-template|go-template-file|template|templatefile|jsonpath|jsonpath-as-json|jsonpath-file.
+      --save-config=false: If true, the configuration of current object will be saved in its
+annotation. Otherwise, the annotation will be unchanged. This flag is useful when you want to
+perform kubectl apply on this object in the future.
+      --show-managed-fields=false: If true, keep the managedFields when printing objects in JSON or
+YAML format.
+      --template='': Template string or path to template file to use when -o=go-template,
+-o=go-template-file. The template format is golang templates
+[http://golang.org/pkg/text/template/#pkg-overview].
+      --validate=true: If true, use a schema to validate the input before sending it
+
+Usage:
+  kubectl create namespace NAME [--dry-run=server|client|none] [options]
+
+Use "kubectl options" for a list of global command-line options (applies to all commands).
+
+
+[root@master ~]# k create ns blue
+namespace/blue created
+
+[root@master ~]# k get ns
+NAME                   STATUS   AGE
+blue                   Active   8s
+default                Active   3d
+kube-node-lease        Active   3d
+kube-public            Active   3d
+kube-system            Active   3d
+kubernetes-dashboard   Active   2d23h
+
+
+[root@master ~]# k create ns orange --dry-run=client -o yaml
+apiVersion: v1
+kind: Namespace
+metadata:
+  creationTimestamp: null
+  name: orange
+spec: {}
+status: {}
+
+
+[root@master ~]# k create ns orange --dry-run=client -o yaml > orange.yaml
+
+[root@master ~]# k create -f orange.yaml 
+namespace/orange created
+
+[root@master ~]# k get ns
+NAME                   STATUS   AGE
+orange                 Active   4s
+blue                   Active   3m28s
+default                Active   3d
+kube-node-lease        Active   3d
+kube-public            Active   3d
+kube-system            Active   3d
+kubernetes-dashboard   Active   2d23h
+
+
+[root@master ~]# more nginx.yaml 
+apiVersion: v1
+kind: Pod
+metadata:
+  name: nginx
+  namespace: orange					<<-- namespace 할당
+spec:
+  containers:
+  - name: nginx
+    image: nginx:1.14
+    ports:
+    - containerPort: 80
+
+
+<<-- default namespace 에 pod 미 존재
+
+[root@master ~]# k get pods
+No resources found in default namespace.
+
+
+<<-- orange namespace 내 pod 확인
+
+[root@master ~]# k get pods -n orange
+NAME    READY   STATUS    RESTARTS   AGE
+nginx   1/1     Running   0          24s
+
+
+
+== context
+
+set-context
+	논리적인 부분(namespace)의 정보를 추가
+
+[root@master ~]# k config current-context
+kubernetes-admin@kubernetes
+
+[root@master ~]# k config view
+apiVersion: v1
+clusters:
+- cluster:
+    certificate-authority-data: DATA+OMITTED
+    server: https://10.100.0.104:6443
+  name: kubernetes
+contexts:
+- context:
+    cluster: kubernetes
+    user: kubernetes-admin
+  name: kubernetes-admin@kubernetes
+current-context: kubernetes-admin@kubernetes
+kind: Config
+preferences: {}
+users:
+- name: kubernetes-admin
+  user:
+    client-certificate-data: REDACTED
+    client-key-data: REDACTED
+
+
+
+
+
+
+
+===== 환경 변수
+
+[root@master ~]# more env.yaml 
+apiVersion: v1
+kind: Pod
+metadata:
+  labels:
+    run: nginxpod
+  name: nginxpod
+spec:
+  containers:
+  - image: nginx:1.14
+    name: nginxpod
+    env:
+    - name: MYENV
+      value: "testvalue"
+
+[root@master ~]# k create -f env.yaml 
+pod/nginxpod created
+
+[root@master ~]# k get pod
+NAME       READY   STATUS    RESTARTS   AGE
+nginxpod   1/1     Running   0          6s
+
+
+#kubectl create -f env.yaml 
+
+#kubectl get pods  # 파드의 이름을 확인하세요 
+
+#kubectl exec nginxpod -- env    # env에 내가 적용한 env가 적용되었는지 확인합니다 
+
+
+
+
+
+===== Liveness Probe
+
+Self healing 기능
+	실행 중인 상태를 liveness probe 를 통해 health check 후 오류 발생시 컨테이너 재 시작
+	3회 연속 오류 발생시 hub.docker.com 에서 이미지 다시 받아와서 실행
+		httpGet	- get request 3회 응답없거나, (200ok 외 값 반환 = 오류)
+		tcpsocket 	- 3 way handshaking
+		exec		- pod 기반 접속 하여, 파일을 가져온다 던가 하는 방식
+
+
+# kubectl describe pod nginx-pod 
+Liveness:       http-get http://:80/ delay=0s timeout=1s period=10s #success=1 #failure=3
+
 
